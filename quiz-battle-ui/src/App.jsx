@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useRef, useState } from "react";
-import { saveQuizToApi } from "./api/quizApi";
+import { getQuizzes, saveQuizToApi } from "./api/quizApi";
 import "./App.css";
 
 const questions = [
@@ -91,6 +91,7 @@ function updateSlideArray(slideData, field, index, value) {
 
 export default function App() {
   const [screen, setScreen] = useState("home");
+  const [editorReturnScreen, setEditorReturnScreen] = useState("home");
   const [pin] = useState("933130");
   const [name, setName] = useState("");
   const [qIndex, setQIndex] = useState(0);
@@ -119,7 +120,7 @@ export default function App() {
     <div className="app">
       {screen === "home" && (
         <div className="home">
-          <Header />
+          <Header onProfile={() => setScreen("profile")} />
 
           <main className="home-shell">
             <div className="join-box">
@@ -141,7 +142,7 @@ export default function App() {
                 <div className="card-copy">
                   <h1>Create a quiz</h1>
                   <p>Play for free with 300 participants</p>
-                  <button onClick={() => setScreen("editor")} type="button">
+                  <button onClick={() => { setEditorReturnScreen("home"); setScreen("editor"); }} type="button">
                     Quiz editor
                   </button>
                 </div>
@@ -162,7 +163,16 @@ export default function App() {
         </div>
       )}
 
-      {screen === "editor" && <EditorScreen onDone={() => setScreen("home")} />}
+      {screen === "profile" && (
+        <ProfileScreen
+          onHome={() => setScreen("home")}
+          onCreateQuiz={() => { setEditorReturnScreen("profile"); setScreen("editor"); }}
+        />
+      )}
+
+      {screen === "editor" && (
+        <EditorScreen onDone={() => setScreen(editorReturnScreen)} />
+      )}
 
       {screen === "name" && (
         <div className="center">
@@ -1379,7 +1389,7 @@ function FieldHeader({ label, hideAi = false }) {
   );
 }
 
-function Header() {
+function Header({ onProfile }) {
   return (
     <header className="home-header">
       <div className="brand" aria-label="Quiz.com">
@@ -1395,11 +1405,115 @@ function Header() {
         <button className="icon-button" aria-label="Search" type="button">
           <SvgIcon name="search" />
         </button>
-        <button className="profile-button" aria-label="Profile" type="button">
+        <button className="profile-button" aria-label="Profile" onClick={onProfile} type="button">
           <SvgIcon name="user" />
         </button>
       </div>
     </header>
+  );
+}
+
+function ProfileScreen({ onHome, onCreateQuiz }) {
+  const [activeTab, setActiveTab] = useState("My Quizzes");
+  const [quizzes, setQuizzes] = useState([]);
+  const [username, setUsername] = useState("test001");
+
+  useEffect(() => {
+    let isMounted = true;
+    getQuizzes()
+      .then((data) => {
+        if (isMounted) setQuizzes(Array.isArray(data) ? data : []);
+      })
+      .catch(() => {
+        if (isMounted) setQuizzes([]);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  return (
+    <div className="profile-page">
+      <header className="profile-header">
+        <button className="brand profile-brand" onClick={onHome} type="button" aria-label="Go to home">
+          <span className="logo-q">Q</span>
+          <span className="logo-u">u</span>
+          <span className="logo-i">i</span>
+          <span className="logo-z">z</span>
+          <span className="logo-dot">.</span>
+          <span className="logo-com">com</span>
+        </button>
+        <div className="profile-join-box">
+          <label htmlFor="profile-game-pin">Join Game?&nbsp; Enter PIN:</label>
+          <input id="profile-game-pin" placeholder="123 456" />
+        </div>
+        <div className="profile-header-actions">
+          <button className="icon-button" aria-label="Search" type="button">
+            <SvgIcon name="search" />
+          </button>
+          <button className="profile-button" aria-label="Profile" type="button">
+            <SvgIcon name="user" />
+          </button>
+        </div>
+      </header>
+
+      <main className="profile-content">
+        <section className="profile-summary">
+          <div className="profile-title-row">
+            <div className="profile-avatar"><SvgIcon name="user" /></div>
+            <h1>{username}</h1>
+          </div>
+          <nav className="profile-tabs" aria-label="Profile sections">
+            {["My Quizzes", "My Reports", "Settings"].map((tab) => (
+              <button
+                className={`profile-tab ${activeTab === tab ? "active" : ""}`}
+                key={tab}
+                onClick={() => setActiveTab(tab)}
+                type="button"
+              >
+                {tab}
+                {tab === "My Reports" && <SvgIcon name="zap" />}
+              </button>
+            ))}
+          </nav>
+        </section>
+
+        {activeTab === "My Quizzes" && (
+          <section className="profile-quiz-grid" aria-label="My quizzes">
+            <div className="create-quiz-tile">
+              <button onClick={onCreateQuiz} type="button">Create Quiz</button>
+            </div>
+            {quizzes.map((quiz) => (
+              <article className="saved-quiz-card" key={quiz._id}>
+                <span className="saved-quiz-icon"><SvgIcon name="book" /></span>
+                <h2>{quiz.title || "Untitled quiz"}</h2>
+                <p>{quiz.slideCount ?? quiz.slides?.length ?? 0} questions</p>
+              </article>
+            ))}
+          </section>
+        )}
+
+        {activeTab === "My Reports" && (
+          <section className="profile-empty-state">
+            <h2>No reports yet</h2>
+            <p>Your game reports will appear here after you host a quiz.</p>
+          </section>
+        )}
+
+        {activeTab === "Settings" && (
+          <section className="profile-settings-panel">
+            <label htmlFor="profile-username">Username</label>
+            <input
+              id="profile-username"
+              maxLength={30}
+              onChange={(event) => setUsername(event.target.value || "test001")}
+              value={username}
+            />
+          </section>
+        )}
+      </main>
+    </div>
   );
 }
 
@@ -1617,6 +1731,12 @@ function SvgIcon({ name }) {
       <>
         <circle cx="12" cy="8" r="4.2" />
         <path d="M4.5 21c1-5 4-7.5 7.5-7.5s6.5 2.5 7.5 7.5" />
+      </>
+    ),
+    book: (
+      <>
+        <path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v17H6.5A2.5 2.5 0 0 0 4 22.5Z" />
+        <path d="M4 5.5v17M8 7h8M8 11h8" />
       </>
     ),
     home: (
